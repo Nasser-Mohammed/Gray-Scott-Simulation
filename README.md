@@ -1,0 +1,1 @@
+This is a JavaScript based simulation for the Gray-Scott system of PDEs.
