@@ -32,6 +32,7 @@ let painting = false;
 let paintButton = 0; // 0 = left(V), 2 = right(U)
 
 function initialize() {
+  console.log("initializing");
   U = new Float32Array(size * size).fill(1);
   V = new Float32Array(size * size).fill(0);
   nextU = new Float32Array(size * size);
@@ -132,12 +133,84 @@ function draw() {
   ctx.drawImage(offscreen, 0, 0, canvas.width / scale, canvas.height / scale);
 }
 
+// --- blowup detection ---
+let blowupDetected = false;
+let blowupThreshold = 5.0; // values beyond this are unrealistic
+
+function detectBlowup() {
+  // scan a few random samples to save time
+  for (let i = 0; i < 500; i++) {
+    const idx = Math.floor(Math.random() * U.length);
+    const u = U[idx];
+    const v = V[idx];
+    if (!isFinite(u) || !isFinite(v) || Math.abs(u) > blowupThreshold || Math.abs(v) > blowupThreshold) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function handleBlowup() {
+  blowupDetected = true;
+  console.warn(" Infinite blowup detected — resetting simulation!");
+  initialize();
+
+  // create overlay message
+  const overlay = document.createElement("div");
+  overlay.textContent = " Infinite blowup detected — simulation reset";
+  Object.assign(overlay.style, {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    transform: "translate(-50%, -50%)",
+    background: "white",
+    color: "black",
+    fontWeight: "bold",
+    fontFamily: "Segoe UI, sans-serif",
+    padding: "14px 20px",
+    borderRadius: "10px",
+    boxShadow: "0 0 15px rgba(0,0,0,0.4)",
+    zIndex: 1000,
+    textAlign: "center",
+    pointerEvents: "none",
+    opacity: "0",
+    transition: "opacity 0.5s ease"
+  });
+
+  // find the canvas container and place it there
+  const container = document.getElementById("canvas-container");
+  container.style.position = "relative"; // ensure proper overlay positioning
+  container.appendChild(overlay);
+
+  // fade in and out
+  requestAnimationFrame(() => overlay.style.opacity = "1");
+  setTimeout(() => {
+    overlay.style.opacity = "0";
+    setTimeout(() => overlay.remove(), 1000);
+  }, 2500);
+}
+
+
+
 // --- main loop ---
 function step() {
-  for (let i = 0; i < 10; i++) update();
-  draw();
+  for (let i = 0; i < 10; i++) {
+    update();
+    if (detectBlowup()) {
+      handleBlowup();
+      break;
+    }
+  }
+
+  if (!blowupDetected) {
+    draw();
+  } else {
+    blowupDetected = false; // clear flag after reset
+  }
+
   requestAnimationFrame(step);
 }
+
 
 initialize();
 step();
@@ -205,16 +278,23 @@ document.getElementById("reset-btn").onclick = initialize;
 
 document.getElementById("preset").onchange = e => {
   const p = e.target.value;
-  if (p === "spots") { F = 0.026; k = 0.06; Du = 0.16; Dv = 0.08}
+  console.log("Chose: ", p);
+  if (p === "spots") { F = 0.026; k = 0.06; Du = 0.15; Dv = 0.08}
   else if (p === "maze") {  F = 0.037; k = 0.06; Du = 0.16; Dv =0.08 }
-  else if (p === "worms") { F = 0.07; k = 0.06; Du=.18; Dv=0.1}
+  else if (p === "worms") { F = 0.07; k = 0.06; Du=.15; Dv=0.1 }
   else if (p === "waves") { F = 0.023; k = 0.051; Du = 0.16; Dv=0.13}
+  else if (p === "chaos") { F = 0.026; k = 0.052; Du = 0.16; Dv=0.11}
   else { F = 0.037; k = 0.06; Du = 0.16; Dv =0.08}
+  console.log("Set: ", Du);
 
   document.getElementById("feed").value = F;
   document.getElementById("kill").value = k;
+  document.getElementById("du").value = Du;
+  document.getElementById("dv").value = Dv;
   document.getElementById("feed-val").textContent = F.toFixed(3);
   document.getElementById("kill-val").textContent = k.toFixed(3);
+  document.getElementById("du-val").textContent = Du.toFixed(3);
+  document.getElementById("dv-val").textContent = Dv.toFixed(3);
 };
 
 document.getElementById("palette").onchange = e => {
