@@ -31,6 +31,22 @@
         <input type="range" id="dv" min="0.05" max="0.25" step="0.01" value="0.08">
         <span id="dv-val">0.08</span>
 
+        <label for="preset">Presets:</label>
+        <select id="preset">
+          <option value="maze">Maze</option>
+          <option value="spots">Spots</option>
+          <option value="worms">Worms</option>
+          <option value="waves">Waves</option>
+        </select>
+          <label for="palette">Color Palette:</label>
+          <select id="palette">
+            <option value="bluered" selected>Blue / Red</option>
+            <option value="purplegreen">Purple / Green</option>
+            <option value="redyellow">Red / Yellow</option>
+            <option value="bluegreen">Blue / Green</option>
+          </select>
+
+
         <button id="reset-btn">Reset Simulation</button>
       </div>
 

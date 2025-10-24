@@ -1,12 +1,29 @@
 const canvas = document.getElementById("canvas2d");
-const ctx = canvas.getContext("2d");
+const ctx = canvas.getContext("2d", { alpha: false });
 
+// --- retina + crisp scaling ---
+function resizeCanvas() {
+  const scale = window.devicePixelRatio || 1;
+
+  // get the *CSS* size that the browser actually draws at
+  const rect = canvas.getBoundingClientRect();
+  const displayWidth = Math.round(rect.width);
+  const displayHeight = Math.round(rect.height);
+
+  // set the internal pixel buffer to match CSS × device scale
+  canvas.width = displayWidth * scale;
+  canvas.height = displayHeight * scale;
+
+  // reset transform so drawing uses logical pixel coords
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+}
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas(); // run once at start
+
+// --- simulation setup ---
 const size = 400;
+let paletteMode = "bluered";
 
-canvas.width = size;
-canvas.height = size;
-
-// Pattern-forming Gray–Scott parameters
 let Du = 0.16, Dv = 0.08, F = 0.037, k = 0.060;
 const dt = 0.75;
 
@@ -56,25 +73,66 @@ function update() {
 }
 
 function draw() {
-  const image = ctx.createImageData(size, size);
+  // draw simulation to offscreen buffer
+  const offscreen = new OffscreenCanvas(size, size);
+  const offctx = offscreen.getContext("2d");
+  const image = offctx.createImageData(size, size);
+  const d = image.data;
+
   for (let i = 0; i < size * size; i++) {
     const u = U[i];
     const v = V[i];
     const idx = i * 4;
 
-    //  Original dark color scheme
-    const r = Math.floor((u - v) * 255);
-    const g = Math.floor(v * 255);
-    const b = Math.floor((1 - u) * 255);
+    let r, g, b;
+    switch (paletteMode) {
+      case "bluered":
+        r = (u - v) * 255;
+        g = v * 255;
+        b = (1 - u) * 255;
+        break;
+      case "purplegreen":
+        r = v * 255;
+        g = (u - v) * 128;
+        b = (1 - u) * 255;
+        break;
+      case "redyellow":
+        r = (1 - v) * 255;
+        g = (u - v) * 255;
+        b = u * 100;
+        break;
+      case "bluegreen":
+        r = v * 255;
+        g = (1 - u) * 255;
+        b = (u - v) * 64;
+        break;
+      default:
+        r = (u - v) * 255;
+        g = v * 255;
+        b = (1 - u) * 255;
+        break;
+    }
 
-    image.data[idx] = Math.max(0, Math.min(255, r));
-    image.data[idx + 1] = Math.max(0, Math.min(255, g));
-    image.data[idx + 2] = Math.max(0, Math.min(255, b));
-    image.data[idx + 3] = 255;
+    d[idx]     = Math.max(0, Math.min(255, r));
+    d[idx + 1] = Math.max(0, Math.min(255, g));
+    d[idx + 2] = Math.max(0, Math.min(255, b));
+    d[idx + 3] = 255;
   }
-  ctx.putImageData(image, 0, 0);
+
+  offctx.putImageData(image, 0, 0);
+
+  // --- clear and draw sharply ---
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0); // clear raw pixel space
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
+
+  ctx.imageSmoothingEnabled = false;
+  const scale = window.devicePixelRatio || 1;
+  ctx.drawImage(offscreen, 0, 0, canvas.width / scale, canvas.height / scale);
 }
 
+// --- main loop ---
 function step() {
   for (let i = 0; i < 10; i++) update();
   draw();
@@ -84,7 +142,7 @@ function step() {
 initialize();
 step();
 
-// --- Continuous Painting ---
+// --- Painting ---
 function paint(x, y, button) {
   const radius = 8;
   for (let j = -radius; j <= radius; j++) {
@@ -93,11 +151,9 @@ function paint(x, y, button) {
       if (dx >= 0 && dx < size && dy >= 0 && dy < size && i * i + j * j < radius * radius) {
         const idx = dx + dy * size;
         if (button === 0) {
-          // Left click — add V (blue)
-          V[idx] = 1.0;
+          V[idx] = 1.0; // left-click adds V
         } else if (button === 2) {
-          // Right click — add U (erase / reset)
-          U[idx] = 1.0;
+          U[idx] = 1.0; // right-click resets
           V[idx] = 0.0;
         }
       }
@@ -119,7 +175,6 @@ canvas.addEventListener("mousedown", e => {
   const { x, y } = getMousePos(e);
   paint(x, y, e.button);
 });
-
 canvas.addEventListener("mouseup", () => painting = false);
 canvas.addEventListener("mouseleave", () => painting = false);
 canvas.addEventListener("mousemove", e => {
@@ -127,7 +182,6 @@ canvas.addEventListener("mousemove", e => {
   const { x, y } = getMousePos(e);
   paint(x, y, paintButton);
 });
-
 canvas.addEventListener("contextmenu", e => e.preventDefault());
 
 // --- Controls ---
@@ -148,3 +202,21 @@ document.getElementById("dv").oninput = e => {
   document.getElementById("dv-val").textContent = Dv.toFixed(2);
 };
 document.getElementById("reset-btn").onclick = initialize;
+
+document.getElementById("preset").onchange = e => {
+  const p = e.target.value;
+  if (p === "spots") { F = 0.026; k = 0.06; Du = 0.16; Dv = 0.08}
+  else if (p === "maze") {  F = 0.037; k = 0.06; Du = 0.16; Dv =0.08 }
+  else if (p === "worms") { F = 0.07; k = 0.06; Du=.18; Dv=0.1}
+  else if (p === "waves") { F = 0.023; k = 0.051; Du = 0.16; Dv=0.13}
+  else { F = 0.037; k = 0.06; Du = 0.16; Dv =0.08}
+
+  document.getElementById("feed").value = F;
+  document.getElementById("kill").value = k;
+  document.getElementById("feed-val").textContent = F.toFixed(3);
+  document.getElementById("kill-val").textContent = k.toFixed(3);
+};
+
+document.getElementById("palette").onchange = e => {
+  paletteMode = e.target.value;
+};
