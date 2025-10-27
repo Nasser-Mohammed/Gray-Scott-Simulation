@@ -2,6 +2,9 @@
 
 [Live simulation](https://nasser-mohammed.github.io/simulations/programs/Gray-Scott/index.html)
 
+https://github.com/user-attachments/assets/ebee138c-6c47-4c40-897e-52955621de1c
+
+
 
 ## Gray-Scott Model
 $$
